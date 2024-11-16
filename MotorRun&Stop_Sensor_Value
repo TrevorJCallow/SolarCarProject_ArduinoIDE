@@ -1,0 +1,90 @@
+#include <Wire.h>
+#include <SparkFunISL29125.h>
+
+// Motor control using L293D with Arduino Uno
+
+// Motor A connections
+int motorAPin1 = 2;  // Input 1 of L293D
+int motorAPin2 = 3;  // Input 2 of L293D
+int enableAPin = 9;  // Enable A of L293D
+
+bool motorRunning = false;
+bool motorStopRequested = false;
+unsigned long lastStopTime = 0;
+const unsigned long restartDelay = 5000;  // Adjust the delay time as needed (in milliseconds)
+
+SFE_ISL29125 RGBsensor; // Change ISL29125 to SFE_ISL29125
+
+void setup() {
+  // Initialize Serial communication
+  Serial.begin(9600);
+
+  // Define the motor control pins as outputs 
+  pinMode(motorAPin1, OUTPUT);
+  pinMode(motorAPin2, OUTPUT);
+  pinMode(enableAPin, OUTPUT);
+
+  // Initialize the motor to stop (no movement)
+  digitalWrite(motorAPin1, LOW);
+  digitalWrite(motorAPin2, LOW);
+  analogWrite(enableAPin, 0);  // Set speed to 0 initially
+
+  // Initialize the RGB sensor
+  if (!RGBsensor.init()) {
+    Serial.println("Error initializing the ISL29125 sensor. Please check your connections.");
+    while (1); // Stay in a loop if the sensor initialization fails
+  }
+}
+
+void loop() {
+  // Read RGB values from the sensor
+  int redValue = RGBsensor.readRed();
+  int greenValue = RGBsensor.readGreen();
+  int blueValue = RGBsensor.readBlue();
+
+  // Print RGB values to Serial Monitor
+  Serial.print("Red: ");
+  Serial.print(redValue);
+  Serial.print(" | Green: ");
+  Serial.print(greenValue);
+  Serial.print(" | Blue: ");
+  Serial.println(blueValue);
+
+  // Check if the red light is detected (adjust the threshold values)
+  if (redValue > 900 || (greenValue < 5 && blueValue < 5)) {
+    // Red light detected
+    if (!motorStopRequested) {
+      // Stop the motor only once when red is detected
+      motorStop();
+      motorStopRequested = true;
+      lastStopTime = millis();  // Record the time when the motor was stopped
+    }
+  } else {
+    // Red light not detected
+    if (motorStopRequested && !motorRunning && millis() - lastStopTime >= restartDelay) {
+      // Start the motor only if it was previously stopped, is not running, 
+      // and enough time has passed since the last stop
+      motorForward();
+      motorStopRequested = false;  // Reset the stop request flag
+    }
+  }
+
+  delay(1000);  // Wait for 1 second before the next iteration
+}
+
+// Function to make the motor move forward
+void motorForward() {
+  digitalWrite(motorAPin1, HIGH);
+  digitalWrite(motorAPin2, LOW);
+  analogWrite(enableAPin, 255);  // Set speed to maximum (255)
+  motorRunning = true;
+}
+
+// Function to stop the motor
+void motorStop() {
+  digitalWrite(motorAPin1, LOW);
+  digitalWrite(motorAPin2, LOW);
+  analogWrite(enableAPin, 0);  // Set speed to 0
+  motorRunning = false;
+}
+
